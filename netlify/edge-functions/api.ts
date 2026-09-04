@@ -1,4 +1,4 @@
-import { fallbackChannels, parseM3U } from "../../src/fallbackData";
+import { fallbackChannels, parseM3U } from "../../src/fallbackData.ts";
 
 function rewriteM3U8Content(
   text: string,
@@ -61,33 +61,10 @@ function rewriteM3U8Content(
   return rewritten.join("\n");
 }
 
-function getUpstreamHeaders(targetUrl: string, ua: string, cookie: string): Record<string, string> {
-  const reqHeaders: Record<string, string> = {
-    "User-Agent": ua || "okhttp/4.11.0",
-    "Origin": "https://toffeelive.com",
-    "Referer": "https://toffeelive.com/"
-  };
-
-  if (cookie) {
-    reqHeaders["Cookie"] = cookie.startsWith("Edge-Cache-Cookie=") || !cookie.startsWith("URLPrefix=")
-      ? cookie
-      : `Edge-Cache-Cookie=${cookie}`;
-  }
-
-  try {
-    const parsed = new URL(targetUrl);
-    reqHeaders["Host"] = parsed.host;
-  } catch (_) {}
-
-  return reqHeaders;
-}
-
-// 1. Standard Web Fetch Request/Response (Netlify Functions v2 & Edge)
 export default async (req: Request) => {
   const url = new URL(req.url);
   const pathname = url.pathname;
 
-  // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -99,7 +76,7 @@ export default async (req: Request) => {
     });
   }
 
-  // CHANNELS ROUTE
+  // CHANNELS
   if (pathname.includes("channels") || url.searchParams.get("action") === "channels") {
     if (url.searchParams.get("source") === "fallback") {
       return new Response(JSON.stringify({
@@ -121,7 +98,7 @@ export default async (req: Request) => {
       const res = await fetch(
         "https://raw.githubusercontent.com/BINOD-XD/Toffee-Auto-Update-Playlist/refs/heads/main/toffee_NS_Player.m3u?t=" + Date.now(),
         {
-          headers: { "User-Agent": "ToffeeLiveProxy-Netlify" },
+          headers: { "User-Agent": "ToffeeLiveProxy-Edge" },
           signal: controller.signal
         }
       );
@@ -143,11 +120,8 @@ export default async (req: Request) => {
           });
         }
       }
-    } catch (e) {
-      console.warn("Netlify function channels fetch error:", e);
-    }
+    } catch (_) {}
 
-    // Fallback response
     return new Response(JSON.stringify({
       source: "fallback",
       channels: fallbackChannels,
@@ -160,14 +134,14 @@ export default async (req: Request) => {
     });
   }
 
-  // STREAM PROXY ROUTE
+  // STREAM PROXY
   if (pathname.includes("stream") || url.searchParams.get("action") === "stream" || url.searchParams.get("url")) {
     const rawUrl = url.searchParams.get("url");
     const cookie = url.searchParams.get("cookie") || "";
     const ua = url.searchParams.get("ua") || "okhttp/4.11.0";
 
     if (!rawUrl) {
-      return new Response("Missing 'url' query parameter.", {
+      return new Response("Missing 'url' query parameter", {
         status: 400,
         headers: { "Access-Control-Allow-Origin": "*" }
       });
@@ -175,7 +149,22 @@ export default async (req: Request) => {
 
     try {
       const targetUrl = decodeURIComponent(rawUrl);
-      const reqHeaders = getUpstreamHeaders(targetUrl, ua, cookie);
+      const reqHeaders: Record<string, string> = {
+        "User-Agent": ua,
+        "Origin": "https://toffeelive.com",
+        "Referer": "https://toffeelive.com/"
+      };
+
+      if (cookie) {
+        reqHeaders["Cookie"] = cookie.startsWith("Edge-Cache-Cookie=") || !cookie.startsWith("URLPrefix=")
+          ? cookie
+          : `Edge-Cache-Cookie=${cookie}`;
+      }
+
+      try {
+        const parsed = new URL(targetUrl);
+        reqHeaders["Host"] = parsed.host;
+      } catch (_) {}
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -211,7 +200,7 @@ export default async (req: Request) => {
         });
       }
 
-      // Stream binary chunks (.ts segment or encryption key)
+      // Stream raw binary chunks directly via Web Streams!
       return new Response(upstream.body, {
         headers: {
           "Content-Type": contentType || "video/MP2T",
@@ -227,185 +216,10 @@ export default async (req: Request) => {
     }
   }
 
-  return new Response(JSON.stringify({ status: "ok", message: "Toffee Netlify Proxy Online" }), {
+  return new Response(JSON.stringify({ status: "ok", message: "Toffee Edge Proxy Active" }), {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*"
     }
   });
-};
-
-// 2. AWS Lambda-style Handler for Netlify Serverless Compatibility
-export const handler = async (event: any) => {
-  const path = event.path || "";
-  const query = event.queryStringParameters || {};
-
-  // CORS preflight
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "*"
-      },
-      body: ""
-    };
-  }
-
-  const isChannels = path.includes("channels") || query.action === "channels";
-  const isStream = path.includes("stream") || query.action === "stream" || Boolean(query.url);
-
-  // CHANNELS
-  if (isChannels && !isStream) {
-    if (query.source === "fallback") {
-      return {
-        statusCode: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        body: JSON.stringify({
-          source: "fallback",
-          channels: fallbackChannels,
-          updatedOn: "Verified Active Streams"
-        })
-      };
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-      const res = await fetch(
-        "https://raw.githubusercontent.com/BINOD-XD/Toffee-Auto-Update-Playlist/refs/heads/main/toffee_NS_Player.m3u?t=" + Date.now(),
-        {
-          headers: { "User-Agent": "ToffeeLiveProxy-Netlify" },
-          signal: controller.signal
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const text = await res.text();
-        const parsed = parseM3U(text);
-        if (parsed.length > 0) {
-          return {
-            statusCode: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*"
-            },
-            body: JSON.stringify({
-              source: "github-raw",
-              channels: parsed,
-              updatedOn: "Auto-synced from GitHub"
-            })
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("Netlify handler channels fetch error:", e);
-    }
-
-    return {
-      statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
-      body: JSON.stringify({
-        source: "fallback",
-        channels: fallbackChannels,
-        updatedOn: "Verified Active Streams"
-      })
-    };
-  }
-
-  // STREAM PROXY
-  if (isStream) {
-    const rawUrl = query.url;
-    const cookie = query.cookie || "";
-    const ua = query.ua || "okhttp/4.11.0";
-
-    if (!rawUrl) {
-      return {
-        statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: "Missing 'url' query parameter"
-      };
-    }
-
-    try {
-      const targetUrl = decodeURIComponent(rawUrl);
-      const reqHeaders = getUpstreamHeaders(targetUrl, ua, cookie);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-      const upstream = await fetch(targetUrl, {
-        headers: reqHeaders,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!upstream.ok) {
-        return {
-          statusCode: upstream.status,
-          headers: { "Access-Control-Allow-Origin": "*" },
-          body: `Upstream error: ${upstream.status}`
-        };
-      }
-
-      const contentType = upstream.headers.get("content-type") || "";
-      const isM3u8 = targetUrl.toLowerCase().includes(".m3u8") ||
-        contentType.includes("mpegurl") ||
-        (contentType.includes("application/octet-stream") && targetUrl.includes(".m3u8"));
-
-      if (isM3u8) {
-        const text = await upstream.text();
-        const rewritten = rewriteM3U8Content(text, targetUrl, cookie, ua);
-
-        return {
-          statusCode: 200,
-          headers: {
-            "Content-Type": "application/vnd.apple.mpegurl",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Access-Control-Allow-Origin": "*"
-          },
-          body: rewritten
-        };
-      }
-
-      // Binary TS video chunk or AES key
-      const arrayBuffer = await upstream.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
-
-      return {
-        statusCode: 200,
-        isBase64Encoded: true,
-        headers: {
-          "Content-Type": contentType || "video/MP2T",
-          "Cache-Control": "public, max-age=86400",
-          "Access-Control-Allow-Origin": "*"
-        },
-        body: base64
-      };
-    } catch (err: any) {
-      return {
-        statusCode: 502,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: `Stream error: ${err?.message || err}`
-      };
-    }
-  }
-
-  return {
-    statusCode: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*"
-    },
-    body: JSON.stringify({ status: "ok", message: "Toffee Netlify Proxy Ready" })
-  };
 };
