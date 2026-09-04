@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Channel, PlaybackHistory } from "./types";
 import VideoPlayer from "./components/VideoPlayer";
+import { fetchChannelsClientResilient, fallbackChannels } from "./fallbackData";
 
 export default function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -82,16 +83,12 @@ export default function App() {
     }
   }, []);
 
-  // Fetch channels on mount
+  // Fetch channels on mount with resilient Netlify & static host fallback
   const fetchChannels = async (forceFallback = false) => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const url = forceFallback ? "/api/channels?source=fallback" : "/api/channels";
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Connection timed out. Using default data.");
-      
-      const data = await res.json();
+      const data = await fetchChannelsClientResilient(forceFallback);
       const loadedChannels: Channel[] = data.channels || [];
       
       setChannels(loadedChannels);
@@ -101,18 +98,29 @@ export default function App() {
       }
 
       // Extract unique categories
-      const extractedCats = Array.from(new Set(loadedChannels.map(c => c.category))).filter((cat) => cat);
+      const extractedCats = Array.from(new Set(loadedChannels.map(c => c.category))).filter((cat) => Boolean(cat));
       setCategories(["All", "Favorites", "History", ...extractedCats]);
 
       // Default play the first channel if none is chosen
       if (loadedChannels.length > 0 && (!selectedChannel || forceFallback)) {
-        // Find sports fallback first or first item
-        const defaultChannel = loadedChannels.find(c => c.category.toLowerCase().includes("sport")) || loadedChannels[0];
+        const defaultChannel = loadedChannels.find(c => 
+          c.category.toLowerCase().includes("sport") || 
+          c.name.toLowerCase().includes("t sports") ||
+          c.name.toLowerCase().includes("ntv")
+        ) || loadedChannels[0];
         setSelectedChannel(defaultChannel);
       }
     } catch (error: any) {
-      setErrorMessage("Could not load channel lists. Displaying base offline listings.");
       console.error("Fetch channels error:", error);
+      // Guarantee channels are always populated even if all fetches fail
+      setChannels(fallbackChannels);
+      setPlaylistSource("Verified Fallback (Offline Mode)");
+      const extractedCats = Array.from(new Set(fallbackChannels.map(c => c.category))).filter((cat) => Boolean(cat));
+      setCategories(["All", "Favorites", "History", ...extractedCats]);
+      if (fallbackChannels.length > 0 && !selectedChannel) {
+        setSelectedChannel(fallbackChannels[0]);
+      }
+      setErrorMessage("Live API sync unavailable. Loaded verified offline channels.");
     } finally {
       setLoading(false);
     }
@@ -250,6 +258,23 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Dynamic Status / Fallback Alert Banner */}
+      {errorMessage && (
+        <div id="app_alert_banner" className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 px-4 md:px-8 py-2 text-xs flex items-center justify-between z-30">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={14} className="text-amber-400 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button 
+            id="dismiss_alert_btn"
+            onClick={() => setErrorMessage(null)} 
+            className="text-amber-400 hover:text-white text-[11px] underline cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main Flex layout spanning full screen width */}
       <main className="flex-1 w-full max-w-none px-4 md:px-8 py-6 flex flex-col lg:flex-row gap-6 lg:gap-8 z-10">

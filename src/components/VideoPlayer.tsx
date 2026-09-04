@@ -22,6 +22,7 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [aspectRatio, setAspectRatio] = useState<"video" | "contain" | "cover">("video");
   const [retryCount, setRetryCount] = useState<number>(0);
+  const [streamMode, setStreamMode] = useState<"proxy" | "direct">("proxy");
   const [qualityLevels, setQualityLevels] = useState<any[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
   const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
@@ -84,8 +85,9 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
     setQualityLevels([]);
     setCurrentQuality(-1);
     
-    // Construct proxy stream URL
+    // Construct proxy stream URL and active URL (handles Netlify static environments)
     const proxyStreamUrl = `/api/stream?url=${encodeURIComponent(channel.link)}&cookie=${encodeURIComponent(channel.cookie || "")}&ua=${encodeURIComponent(channel.user_agent || "")}`;
+    const activeStreamUrl = streamMode === "direct" ? channel.link : proxyStreamUrl;
     
     const video = videoRef.current;
     if (!video) return;
@@ -114,7 +116,7 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
       });
       hlsRef.current = hls;
 
-      hls.loadSource(proxyStreamUrl);
+      hls.loadSource(activeStreamUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
@@ -143,6 +145,16 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
 
       let consecutiveFragErrors = 0;
       hls.on(Hls.Events.ERROR, (_, data) => {
+        // If proxy fails with 404/manifest error (common in static Netlify hosting), auto fallback to direct link
+        if (
+          (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.response?.code === 404) &&
+          streamMode === "proxy"
+        ) {
+          console.warn("Proxy manifest failed (404/network). Auto-switching to Direct Stream mode:", channel.link);
+          setStreamMode("direct");
+          return;
+        }
+
         // Immediate detection of 403 authorization/expired errors
         if (data.response?.code === 403) {
           setLoadError("Match Link Expired (HTTP 403): This live match-specific option is currently offline. Since temporary streaming keys are active only during live play, this stream has expired. Try checking our active 24/7 networks like SONY SPORTS, TOFFEE Sports, or Somoy TV!");
@@ -211,19 +223,24 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
       };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native iOS Safari support fallback
-      video.src = proxyStreamUrl;
+      video.src = activeStreamUrl;
       video.addEventListener("loadedmetadata", () => {
         setIsBuffering(false);
         video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       });
       
-      video.addEventListener("error", (e) => {
-        setLoadError("Match/Event Currently Offline: This live event channel is currently offline because no live match has started yet. Please choose another active 24/7 channel!");
+      video.addEventListener("error", () => {
+        if (streamMode === "proxy") {
+          console.warn("Proxy failed on iOS. Switching to direct mode...");
+          setStreamMode("direct");
+        } else {
+          setLoadError("Match/Event Currently Offline: This live event channel is currently offline because no live match has started yet. Please choose another active 24/7 channel!");
+        }
       });
     } else {
       setLoadError("HLS playback is not supported on this browser.");
     }
-  }, [channel, retryCount]);
+  }, [channel, retryCount, streamMode]);
 
   // Sync volume state to video ref
   useEffect(() => {
@@ -368,14 +385,27 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
               <p className="text-white/60 font-sans text-xs max-w-md mb-6 leading-relaxed max-h-[140px] overflow-y-auto">
                 {loadError}
               </p>
-              <button
-                id="player_retry_btn"
-                onClick={handleRetry}
-                className="flex items-center gap-2 bg-toffee-accent text-white px-4 py-2 rounded-lg text-sm font-medium transition hover:bg-toffee-accent/80 hover:scale-105 active:scale-95"
-              >
-                <RefreshCw size={16} />
-                Reconnect Proxy
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  id="player_retry_btn"
+                  onClick={handleRetry}
+                  className="flex items-center gap-2 bg-toffee-accent text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition hover:bg-toffee-accent/80 hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <RefreshCw size={14} />
+                  Retry Stream
+                </button>
+                <button
+                  id="player_switch_mode_btn"
+                  onClick={() => {
+                    setStreamMode(prev => prev === "proxy" ? "direct" : "proxy");
+                    setLoadError(null);
+                    setIsBuffering(true);
+                  }}
+                  className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition border border-white/15 active:scale-95 cursor-pointer"
+                >
+                  Switch to {streamMode === "proxy" ? "Direct Stream" : "Proxy Stream"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -420,11 +450,23 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
                 </div>
               </div>
 
-              {/* Live latency indicator */}
-              <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 sm:py-1 rounded-sm border border-emerald-400/20 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="hidden xs:inline">SERVER</span> ONLINE
-              </div>
+              {/* Stream mode & latency indicator */}
+              <button
+                id="player_stream_mode_toggle"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStreamMode(prev => prev === "proxy" ? "direct" : "proxy");
+                }}
+                className={`flex items-center gap-1.5 text-[9px] sm:text-[10px] font-mono px-2 py-0.5 sm:py-1 rounded-sm border transition cursor-pointer shrink-0 ${
+                  streamMode === "proxy"
+                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-400/25 hover:bg-emerald-500/20"
+                    : "text-sky-400 bg-sky-500/10 border-sky-400/25 hover:bg-sky-500/20"
+                }`}
+                title={`Click to switch mode (Current: ${streamMode.toUpperCase()})`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${streamMode === "proxy" ? "bg-emerald-400 animate-ping" : "bg-sky-400"}`} />
+                <span>{streamMode === "proxy" ? "PROXY STREAM" : "DIRECT STREAM"}</span>
+              </button>
             </div>
 
             {/* Middle part - Buffer overlay trigger placeholder or info */}
