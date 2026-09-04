@@ -1,6 +1,60 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // Safeguard against getter-only properties on window (e.g., fetch, WebSocket)
+      // When hosting environments or polyfills define window.fetch with only a getter,
+      // subsequent assignments by extensions, loaders, or libraries throw:
+      // "TypeError: Cannot set property fetch of #<Window> which has only a getter".
+      (function() {
+        try {
+          var originalDefineProperty = Object.defineProperty;
+          Object.defineProperty = function(obj, prop, descriptor) {
+            if (obj === window && descriptor && typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') {
+              var origGet = descriptor.get;
+              var customVal;
+              var hasCustomVal = false;
+              var safeDescriptor = {
+                configurable: true,
+                enumerable: descriptor.enumerable !== undefined ? descriptor.enumerable : true,
+                get: function() {
+                  if (hasCustomVal) return customVal;
+                  return origGet.call(this);
+                },
+                set: function(val) {
+                  customVal = val;
+                  hasCustomVal = true;
+                }
+              };
+              return originalDefineProperty.call(Object, obj, prop, safeDescriptor);
+            }
+            return originalDefineProperty.apply(Object, arguments);
+          };
+
+          // Also safeguard existing window.fetch immediately if already defined
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (desc && desc.configurable && typeof desc.get === 'function' && typeof desc.set !== 'function') {
+            var currentGet = desc.get;
+            var customFetch;
+            var hasCustomFetch = false;
+            originalDefineProperty.call(Object, window, 'fetch', {
+              configurable: true,
+              enumerable: desc.enumerable !== undefined ? desc.enumerable : true,
+              get: function() {
+                if (hasCustomFetch) return customFetch;
+                return currentGet.call(this);
+              },
+              set: function(v) {
+                customFetch = v;
+                hasCustomFetch = true;
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Window property accessor safeguard warning:', e);
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Toffee Live TV</title>
