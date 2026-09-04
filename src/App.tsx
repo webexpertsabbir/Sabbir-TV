@@ -354,7 +354,7 @@ export default function App() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <h1 className="font-display font-black text-sm sm:text-base md:text-lg tracking-tight text-white truncate">
-                SABBIR LIVE TV
+                SMART LIVE TV
               </h1>
               <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-mono font-bold bg-toffee-accent/15 text-toffee-accent px-1.5 py-0.5 rounded border border-toffee-accent/30 uppercase shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-toffee-accent animate-ping" />
