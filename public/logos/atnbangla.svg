@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <defs>
+      <linearGradient id="atn-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#051226"/>
+        <stop offset="100%" stop-color="#102a45"/>
+      </linearGradient>
+      <linearGradient id="atn-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ffd152"/>
+        <stop offset="100%" stop-color="#d49e1e"/>
+      </linearGradient>
+    </defs>
+    <rect width="400" height="240" rx="24" fill="url(#atn-bg)"/>
+    <polygon points="100,60 145,120 100,180 55,120" fill="url(#atn-gold)"/>
+    <circle cx="100" cy="120" r="20" fill="#d90429"/>
+    <text x="170" y="112" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="44" letter-spacing="2">ATN</text>
+    <text x="170" y="148" fill="#ffd152" font-family="system-ui, sans-serif" font-weight="800" font-size="28" letter-spacing="1">BANGLA</text>
+    <rect x="300" y="75" width="50" height="24" rx="5" fill="#d90429"/>
+    <text x="325" y="92" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="14" text-anchor="middle">HD</text>
+  </svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <rect width="400" height="240" rx="24" fill="#081c10"/>
+    <circle cx="95" cy="120" r="46" fill="#006a4e"/>
+    <circle cx="95" cy="120" r="28" fill="#f42a41"/>
+    <text x="165" y="115" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="48">বিটিভি</text>
+    <text x="165" y="148" fill="#00d68f" font-family="system-ui, sans-serif" font-weight="800" font-size="24">BTV NATIONAL</text>
+  </svg>

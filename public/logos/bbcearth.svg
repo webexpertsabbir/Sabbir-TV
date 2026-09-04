@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <rect width="400" height="240" rx="24" fill="#040b17"/>
+    <rect x="55" y="85" width="30" height="30" fill="#ffffff"/>
+    <text x="70" y="108" fill="#000000" font-family="system-ui, sans-serif" font-weight="900" font-size="22" text-anchor="middle">B</text>
+    <rect x="90" y="85" width="30" height="30" fill="#ffffff"/>
+    <text x="105" y="108" fill="#000000" font-family="system-ui, sans-serif" font-weight="900" font-size="22" text-anchor="middle">B</text>
+    <rect x="125" y="85" width="30" height="30" fill="#ffffff"/>
+    <text x="140" y="108" fill="#000000" font-family="system-ui, sans-serif" font-weight="900" font-size="22" text-anchor="middle">C</text>
+    <text x="175" y="110" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="44" letter-spacing="2">EARTH</text>
+    <rect x="175" y="125" width="55" height="22" rx="4" fill="#0077b6"/>
+    <text x="202" y="141" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="14" text-anchor="middle">HD</text>
+  </svg>

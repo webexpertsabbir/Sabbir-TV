@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { fallbackChannels } from "./serverFallbackData";
 import { Channel } from "./src/types";
+import { getChannelLogo, isProblematicLogoUrl } from "./src/utils/channelLogos";
 
 // Helper function to parse M3U/JSON files
 function parseM3U(m3uContent: string): Channel[] {
@@ -13,14 +14,20 @@ function parseM3U(m3uContent: string): Channel[] {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
-        return parsed.map((item: any, idx: number) => ({
-          name: item.name || `Channel #${idx + 1}`,
-          logo: item.logo || "",
-          category: item.category || "LIVE",
-          link: item.link || "",
-          cookie: item.cookie || "",
-          user_agent: item.user_agent || "okhttp/4.11.0"
-        })).filter(ch => ch.link);
+        return parsed.map((item: any, idx: number) => {
+          const ch: Channel = {
+            name: item.name || `Channel #${idx + 1}`,
+            logo: item.logo || "",
+            category: item.category || "LIVE",
+            link: item.link || "",
+            cookie: item.cookie || "",
+            user_agent: item.user_agent || "okhttp/4.11.0"
+          };
+          if (!ch.logo || isProblematicLogoUrl(ch.logo)) {
+            ch.logo = getChannelLogo(ch);
+          }
+          return ch;
+        }).filter(ch => ch.link);
       }
     } catch (e) {
       console.error("Failed to parse remote JSON, falling back to M3U parser:", e);
@@ -61,6 +68,9 @@ function parseM3U(m3uContent: string): Channel[] {
     } else if (line.startsWith("http://") || line.startsWith("https://")) {
       if (currentChannel) {
         currentChannel.link = line;
+        if (!currentChannel.logo || isProblematicLogoUrl(currentChannel.logo)) {
+          currentChannel.logo = getChannelLogo(currentChannel as Channel);
+        }
         channels.push(currentChannel as Channel);
         currentChannel = null;
       }

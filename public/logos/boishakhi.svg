@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <defs>
+      <linearGradient id="b-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#140608"/>
+        <stop offset="100%" stop-color="#2b0a10"/>
+      </linearGradient>
+    </defs>
+    <rect width="400" height="240" rx="24" fill="url(#b-bg)"/>
+    <path d="M 60 150 C 60 90, 110 70, 140 70 C 140 130, 90 170, 60 150 Z" fill="#008037"/>
+    <circle cx="95" cy="115" r="25" fill="#da291c"/>
+    <text x="160" y="118" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="40">বৈশাখী টিভি</text>
+    <text x="160" y="152" fill="#2ec4b6" font-family="system-ui, sans-serif" font-weight="700" font-size="18" letter-spacing="1">BOISHAKHI TV</text>
+  </svg>

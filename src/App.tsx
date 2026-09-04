@@ -4,11 +4,12 @@ import {
   Tv, Heart, Clock, Search, RefreshCw, Star, Play, 
   Compass, AlertCircle, RotateCcw,
   LayoutGrid, List, X, Trophy, Radio, Film, Newspaper, Baby,
-  Share2, Check, Maximize2, Shrink, Monitor
+  Share2, Check, Maximize2, Shrink, Monitor, ArrowUp, SkipBack, SkipForward
 } from "lucide-react";
 import { Channel, PlaybackHistory } from "./types";
 import VideoPlayer from "./components/VideoPlayer";
 import ChannelCard from "./components/ChannelCard";
+import ChannelLogo from "./components/ChannelLogo";
 import MobileBottomNav from "./components/MobileBottomNav";
 import { fetchChannelsClientResilient, fallbackChannels } from "./fallbackData";
 
@@ -37,6 +38,42 @@ export default function App() {
     }
   });
   const [isAppFullscreen, setIsAppFullscreen] = useState<boolean>(false);
+  const [isMobileSticky, setIsMobileSticky] = useState<boolean>(false);
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => 
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false
+  );
+  const [channelToast, setChannelToast] = useState<string | null>(null);
+  const playerSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Detect mobile viewport size changes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 1024);
+    };
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Track window scroll on mobile to seamlessly dock the video player to the top
+  useEffect(() => {
+    if (!isMobileScreen) {
+      setIsMobileSticky(false);
+      return;
+    }
+
+    const handleScroll = () => {
+      const sentinel = playerSentinelRef.current;
+      if (!sentinel) return;
+      const rect = sentinel.getBoundingClientRect();
+      // Stick when the sentinel scrolls above the top of viewport (or past header)
+      const shouldStick = rect.top <= 2 && window.scrollY > 30;
+      setIsMobileSticky(shouldStick);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isMobileScreen]);
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -213,8 +250,13 @@ export default function App() {
       localStorage.setItem("toffee_playback_history", JSON.stringify(updatedHistory));
     } catch (_) {}
 
-    // Scroll player to top smoothly on mobile
-    if (window.innerWidth < 1024) {
+    // Mobile visual feedback toast
+    setChannelToast(`চালু হচ্ছে: ${ch.name}`);
+    setTimeout(() => setChannelToast(null), 2500);
+
+    // Only scroll player to top if NOT currently sticky on mobile
+    // When sticky, the user is intentionally browsing channels while watching uninterrupted!
+    if (window.innerWidth < 1024 && !isMobileSticky) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -297,14 +339,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-radial-brand text-gray-100 flex flex-col selection:bg-toffee-accent/50 selection:text-white overflow-x-hidden font-sans relative pb-20 lg:pb-6">
+    <div className="min-h-screen bg-gradient-radial-brand text-gray-100 flex flex-col selection:bg-toffee-accent/50 selection:text-white overflow-x-clip font-sans relative pb-24 lg:pb-6">
       
       {/* Visual background lights for beautiful design */}
       <div className="absolute top-0 right-1/4 w-[400px] sm:w-[500px] h-[400px] sm:h-[500px] bg-toffee-accent/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-5 w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] bg-sky-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Styled Responsive Top Header */}
-      <header id="app_header" className="sticky top-0 bg-[#08090d]/90 backdrop-blur-xl border-b border-frosted-medium z-40 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+      {/* Styled Responsive Top Header (Relative on mobile so video can dock at top, sticky on desktop) */}
+      <header id="app_header" className="relative lg:sticky lg:top-0 bg-[#08090d]/90 backdrop-blur-xl border-b border-frosted-medium z-30 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-toffee-accent to-pink-500 flex items-center justify-center text-white shadow-lg shadow-toffee-accent/25 shrink-0">
             <Tv size={18} className="animate-pulse" />
@@ -413,15 +455,95 @@ export default function App() {
           isTheaterMode ? "w-full" : "lg:flex-1"
         }`}>
           
-          {/* Responsive Video Player Container */}
-          <div className="w-full">
+          {/* Sentinel to track scroll position on mobile */}
+          <div ref={playerSentinelRef} className="w-full h-0 pointer-events-none" />
+
+          {/* Placeholder when sticky on mobile to avoid layout shifts */}
+          {isMobileSticky && isMobileScreen && (
+            <div 
+              className="w-full aspect-video rounded-2xl bg-black/30 border border-white/5 flex items-center justify-center text-xs font-mono mb-2 sm:mb-4 lg:hidden"
+              aria-hidden="true"
+            >
+              <div className="flex items-center gap-2 text-toffee-accent/80 font-semibold animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-toffee-accent animate-ping" />
+                <span>ভিডিও উপরে ফিক্সড আছে</span>
+              </div>
+            </div>
+          )}
+
+          {/* Responsive Video Player Container: Docks cleanly to top on mobile when scrolling */}
+          <div 
+            id="player_outer_wrapper"
+            className={`w-full transition-all duration-300 ${
+              isMobileSticky && isMobileScreen
+                ? "fixed top-0 left-0 right-0 z-40 bg-[#08090d] shadow-2xl shadow-black/95 border-b border-white/10 lg:static lg:bg-transparent lg:shadow-none lg:border-none"
+                : "relative"
+            }`}
+          >
             <VideoPlayer 
               channel={selectedChannel}
               onNextChannel={() => getIndexAndNavigate("next")}
               onPrevChannel={() => getIndexAndNavigate("prev")}
               isTheaterMode={isTheaterMode}
               onToggleTheaterMode={handleToggleTheaterMode}
+              isMobileSticky={isMobileSticky && isMobileScreen}
+              onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             />
+
+            {/* Mobile Sticky Mini Dock Bar - Appears right under the sticky video on mobile */}
+            {isMobileSticky && isMobileScreen && selectedChannel && (
+              <div 
+                id="mobile_sticky_dock_bar"
+                className="lg:hidden flex items-center justify-between px-3 py-1.5 bg-[#0b0d14]/95 border-t border-white/10 text-xs text-white backdrop-blur-md"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded bg-black/50 p-0.5 border border-white/10 shrink-0 overflow-hidden flex items-center justify-center">
+                    <ChannelLogo channel={selectedChannel} imgClassName="max-h-full max-w-full object-contain" />
+                  </div>
+                  <span className="font-display font-bold text-[11px] sm:text-xs truncate max-w-[140px] xs:max-w-[190px]">
+                    {selectedChannel.name}
+                  </span>
+                  <span className="flex items-center gap-1 text-[8px] font-mono text-toffee-accent font-bold px-1 py-0.5 rounded bg-toffee-accent/15 uppercase shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-toffee-accent animate-ping" />
+                    LIVE
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    id="sticky_prev_ch_btn"
+                    type="button"
+                    onClick={() => getIndexAndNavigate("prev")}
+                    className="p-1 rounded-md bg-white/5 hover:bg-white/10 text-gray-300 active:scale-90 touch-manipulation cursor-pointer"
+                    title="আগের চ্যানেল"
+                    aria-label="আগের চ্যানেল"
+                  >
+                    <SkipBack size={13} />
+                  </button>
+                  <button
+                    id="sticky_next_ch_btn"
+                    type="button"
+                    onClick={() => getIndexAndNavigate("next")}
+                    className="p-1 rounded-md bg-white/5 hover:bg-white/10 text-gray-300 active:scale-90 touch-manipulation cursor-pointer"
+                    title="পরের চ্যানেল"
+                    aria-label="পরের চ্যানেল"
+                  >
+                    <SkipForward size={13} />
+                  </button>
+                  <button
+                    id="sticky_scroll_top_btn"
+                    type="button"
+                    onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-toffee-accent/20 text-toffee-accent border border-toffee-accent/35 text-[10px] font-bold active:scale-95 touch-manipulation ml-1 cursor-pointer"
+                    title="শীর্ষে যান"
+                    aria-label="শীর্ষে যান"
+                  >
+                    <ArrowUp size={11} />
+                    <span>উপরে</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Selected Channel Metadata Bar */}
@@ -431,21 +553,12 @@ export default function App() {
               className="bg-frosted-card rounded-xl sm:rounded-2xl border border-frosted-medium p-3 sm:p-4 flex items-center justify-between gap-3 shadow-lg shadow-black/20"
             >
               <div className="flex items-center gap-3 min-w-0">
-                {selectedChannel.logo ? (
-                  <img
-                    src={selectedChannel.logo}
-                    alt={selectedChannel.name}
-                    className="w-10 h-10 sm:w-12 sm:h-12 object-contain rounded-lg bg-black/40 p-1 border border-frosted-medium shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = "none";
-                    }}
-                    referrerPolicy="no-referrer"
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-black/40 p-1 border border-frosted-medium shrink-0 overflow-hidden flex items-center justify-center">
+                  <ChannelLogo
+                    channel={selectedChannel}
+                    imgClassName="max-h-full max-w-full object-contain"
                   />
-                ) : (
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-toffee-accent/10 flex items-center justify-center text-toffee-accent border border-toffee-accent/20 shrink-0">
-                    <Tv size={20} />
-                  </div>
-                )}
+                </div>
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

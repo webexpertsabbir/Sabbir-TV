@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import Hls from "hls.js";
 import { Play, Pause, Volume2, VolumeX, Maximize2, Tv, AlertCircle, RefreshCw, Layers, Check, Expand, Shrink, SkipBack, SkipForward, PictureInPicture, Monitor } from "lucide-react";
 import { Channel } from "../types";
+import ChannelLogo from "./ChannelLogo";
 
 interface VideoPlayerProps {
   channel: Channel | null;
@@ -9,6 +10,8 @@ interface VideoPlayerProps {
   onNextChannel?: () => void;
   isTheaterMode?: boolean;
   onToggleTheaterMode?: () => void;
+  isMobileSticky?: boolean;
+  onScrollToTop?: () => void;
 }
 
 export default function VideoPlayer({ 
@@ -16,7 +19,9 @@ export default function VideoPlayer({
   onPrevChannel, 
   onNextChannel,
   isTheaterMode = false,
-  onToggleTheaterMode
+  onToggleTheaterMode,
+  isMobileSticky = false,
+  onScrollToTop
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -38,6 +43,7 @@ export default function VideoPlayer({
   const [showControls, setShowControls] = useState<boolean>(true);
   const [tapRipple, setTapRipple] = useState<"prev" | "next" | null>(null);
   const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const touchStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-hide controls timer management
@@ -405,15 +411,42 @@ export default function VideoPlayer({
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now()
+    };
+  };
+
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.changedTouches[0];
     const rect = e.currentTarget.getBoundingClientRect();
     const touchX = touch.clientX - rect.left;
-    const now = Date.now();
-    const timeDiff = now - lastTapRef.current.time;
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const timeDiff = Date.now() - touchStartRef.current.time;
 
-    // Double tap detected (within 320ms and within 80px distance)
-    if (timeDiff < 320 && Math.abs(touchX - lastTapRef.current.x) < 80) {
+    // 1. Horizontal Swipe gesture (Left = Next Channel, Right = Prev Channel)
+    // Needs distinct horizontal motion without vertical scrolling interference
+    if (Math.abs(deltaX) > 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && timeDiff < 400) {
+      if (deltaX < 0 && onNextChannel) {
+        onNextChannel();
+        setTapRipple("next");
+        setTimeout(() => setTapRipple(null), 700);
+        return;
+      } else if (deltaX > 0 && onPrevChannel) {
+        onPrevChannel();
+        setTapRipple("prev");
+        setTimeout(() => setTapRipple(null), 700);
+        return;
+      }
+    }
+
+    // 2. Double tap gesture (within 320ms and within 80px distance)
+    const timeSinceLastTap = Date.now() - lastTapRef.current.time;
+    if (timeSinceLastTap < 320 && Math.abs(touchX - lastTapRef.current.x) < 80) {
       if (touchX < rect.width * 0.45 && onPrevChannel) {
         onPrevChannel();
         setTapRipple("prev");
@@ -425,7 +458,9 @@ export default function VideoPlayer({
       }
       lastTapRef.current = { time: 0, x: 0 };
     } else {
-      lastTapRef.current = { time: now, x: touchX };
+      // 3. Single tap -> Toggle controls
+      lastTapRef.current = { time: Date.now(), x: touchX };
+      setShowControls(prev => !prev);
       resetControlsTimer();
     }
   };
@@ -437,13 +472,16 @@ export default function VideoPlayer({
       onMouseMove={handleMouseMove}
       onMouseEnter={resetControlsTimer}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       className={`relative w-full overflow-hidden bg-frosted-card border shadow-2xl transition-all duration-300 select-none touch-manipulation ${
         isFullscreen
           ? "fixed inset-0 z-50 rounded-none border-none w-screen h-screen"
           : isTheaterMode
             ? "aspect-video max-h-[78vh] 2xl:max-h-[82vh] rounded-2xl mx-auto border-frosted-medium hover:border-toffee-accent/30"
-            : "aspect-video rounded-2xl border-frosted-medium hover:border-toffee-accent/20"
+            : isMobileSticky
+              ? "aspect-video max-h-[38vh] sm:max-h-[44vh] rounded-none sm:rounded-b-2xl border-x-0 border-t-0 border-b border-white/10"
+              : "aspect-video rounded-2xl border-frosted-medium hover:border-toffee-accent/20"
       } ${
         isPlaying && !showControls ? "cursor-none" : "cursor-default"
       }`}
@@ -534,22 +572,12 @@ export default function VideoPlayer({
             {/* Top header: Channel Info */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                {channel.logo ? (
-                  <img
-                    id="player_header_logo"
-                    src={channel.logo}
-                    alt={channel.name}
-                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-md bg-black/50 p-1 border border-white/10 shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = "none";
-                    }}
-                    referrerPolicy="no-referrer"
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-md bg-black/50 p-1 border border-white/10 shrink-0 overflow-hidden flex items-center justify-center">
+                  <ChannelLogo
+                    channel={channel}
+                    imgClassName="max-h-full max-w-full object-contain"
                   />
-                ) : (
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-md bg-toffee-accent/15 flex items-center justify-center border border-toffee-accent/20 shrink-0">
-                    <Tv size={16} className="text-toffee-accent" />
-                  </div>
-                )}
+                </div>
                 <div className="min-w-0">
                   <h2 id="player_current_name" className="text-white font-display font-semibold text-xs sm:text-base leading-tight truncate">
                     {channel.name}

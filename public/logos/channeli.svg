@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <rect width="400" height="240" rx="24" fill="#071a10"/>
+    <circle cx="95" cy="120" r="46" fill="#008037"/>
+    <text x="95" y="140" fill="#ffffff" font-family="Georgia, serif" font-weight="900" font-size="70" text-anchor="middle">i</text>
+    <text x="165" y="115" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="38">চ্যানেল আই</text>
+    <text x="165" y="148" fill="#00c853" font-family="system-ui, sans-serif" font-weight="800" font-size="24">CHANNEL i</text>
+  </svg>

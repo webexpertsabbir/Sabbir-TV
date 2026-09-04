@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "motion/react";
 import { Tv, Star, Radio } from "lucide-react";
 import { Channel } from "../types";
+import ChannelLogo from "./ChannelLogo";
 
 interface ChannelCardProps {
   key?: React.Key;
@@ -62,22 +63,10 @@ export default function ChannelCard({
 
         {/* Center Logo */}
         <div className="relative w-full aspect-video sm:h-20 flex items-center justify-center bg-black/40 rounded-xl p-2 border border-white/5 my-1 overflow-hidden">
-          {channel.logo ? (
-            <img
-              src={channel.logo}
-              alt={channel.name}
-              className="max-h-full max-w-full object-contain filter group-hover:scale-110 transition duration-300 drop-shadow-md"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-              referrerPolicy="no-referrer"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex items-center justify-center text-gray-500">
-              <Tv size={28} />
-            </div>
-          )}
+          <ChannelLogo
+            channel={channel}
+            imgClassName="max-h-full max-w-full object-contain filter group-hover:scale-110 transition duration-300 drop-shadow-md"
+          />
 
           {/* Equalizer animation overlay when selected */}
           {isSelected && (
@@ -122,20 +111,10 @@ export default function ChannelCard({
       <div className="flex items-center gap-3 min-w-0">
         {/* Channel Logo thumbnail */}
         <div className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 bg-black/40 rounded-lg p-1.5 border border-white/5 flex items-center justify-center relative overflow-hidden">
-          {channel.logo ? (
-            <img
-              src={channel.logo}
-              alt={channel.name}
-              className="max-h-full max-w-full object-contain group-hover:scale-105 transition duration-300"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-              referrerPolicy="no-referrer"
-              loading="lazy"
-            />
-          ) : (
-            <Tv size={18} className="text-gray-500" />
-          )}
+          <ChannelLogo
+            channel={channel}
+            imgClassName="max-h-full max-w-full object-contain group-hover:scale-105 transition duration-300"
+          />
 
           {isSelected && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-0.5">

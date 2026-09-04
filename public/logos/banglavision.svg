@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+    <defs>
+      <linearGradient id="bv-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0a1224"/>
+        <stop offset="100%" stop-color="#14213d"/>
+      </linearGradient>
+    </defs>
+    <rect width="400" height="240" rx="24" fill="url(#bv-bg)"/>
+    <path d="M 50 120 Q 95 65 140 120 Q 95 175 50 120 Z" fill="none" stroke="#0099ff" stroke-width="8"/>
+    <circle cx="95" cy="120" r="24" fill="#f42a41"/>
+    <circle cx="95" cy="120" r="10" fill="#ffffff"/>
+    <text x="165" y="112" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="32">বাংলাভিশন</text>
+    <text x="165" y="148" fill="#00b4d8" font-family="system-ui, sans-serif" font-weight="800" font-size="22" letter-spacing="1">BanglaVision</text>
+    <rect x="325" y="128" width="50" height="24" rx="5" fill="#f42a41"/>
+    <text x="350" y="145" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="14" text-anchor="middle">HD</text>
+  </svg>
