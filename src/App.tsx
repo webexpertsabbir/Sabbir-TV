@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Tv, Sparkles, Heart, Clock, Search, RefreshCw, Star, Play, 
-  HelpCircle, Monitor, Compass, AlertCircle, RefreshCcw, LogOut,
-  ChevronLeft, ChevronRight
+  Tv, Heart, Clock, Search, RefreshCw, Star, Play, 
+  Compass, AlertCircle, RotateCcw,
+  LayoutGrid, List, X, Trophy, Radio, Film, Newspaper, Baby,
+  Share2, Check, Maximize2, Shrink, Monitor
 } from "lucide-react";
 import { Channel, PlaybackHistory } from "./types";
 import VideoPlayer from "./components/VideoPlayer";
+import ChannelCard from "./components/ChannelCard";
+import MobileBottomNav from "./components/MobileBottomNav";
 import { fetchChannelsClientResilient, fallbackChannels } from "./fallbackData";
 
 export default function App() {
@@ -24,9 +27,55 @@ export default function App() {
   const [playlistSource, setPlaylistSource] = useState<string>("local");
   const [playlistDate, setPlaylistDate] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("toffee_theater_mode") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+  const [isAppFullscreen, setIsAppFullscreen] = useState<boolean>(false);
 
-  const categoriesRef = React.useRef<HTMLDivElement>(null);
-  const dragRef = React.useRef({
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsAppFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  const toggleAppFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error("Fullscreen toggle error:", err);
+    }
+  };
+
+  const handleToggleTheaterMode = () => {
+    setIsTheaterMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("toffee_theater_mode", String(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const dragRef = useRef({
     isMouseDown: false,
     startX: 0,
     scrollLeft: 0,
@@ -45,7 +94,7 @@ export default function App() {
     if (!dragRef.current.isMouseDown || !categoriesRef.current) return;
     e.preventDefault();
     const x = e.pageX - categoriesRef.current.offsetLeft;
-    const walk = (x - dragRef.current.startX) * 1.5; // multiplier for nice speed
+    const walk = (x - dragRef.current.startX) * 1.5;
     if (Math.abs(walk) > 4) {
       dragRef.current.hasMoved = true;
     }
@@ -54,16 +103,6 @@ export default function App() {
 
   const handleMouseUpOrLeave = () => {
     dragRef.current.isMouseDown = false;
-  };
-
-  const scrollCategories = (direction: "left" | "right") => {
-    if (categoriesRef.current) {
-      const scrollAmount = 180;
-      categoriesRef.current.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth"
-      });
-    }
   };
 
   // Load favorites & history from localStorage on mount
@@ -78,10 +117,23 @@ export default function App() {
       if (storedHistory) {
         setHistoryList(JSON.parse(storedHistory));
       }
+
+      // Check saved view mode
+      const storedViewMode = localStorage.getItem("toffee_view_mode") as "grid" | "list" | null;
+      if (storedViewMode) {
+        setViewMode(storedViewMode);
+      }
     } catch (e) {
-      console.error("Local storage corruption, resetting states:", e);
+      console.error("Local storage error:", e);
     }
   }, []);
+
+  const handleSetViewMode = (mode: "grid" | "list") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("toffee_view_mode", mode);
+    } catch (_) {}
+  };
 
   // Fetch channels on mount with resilient Netlify & static host fallback
   const fetchChannels = async (forceFallback = false) => {
@@ -112,7 +164,6 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Fetch channels error:", error);
-      // Guarantee channels are always populated even if all fetches fail
       setChannels(fallbackChannels);
       setPlaylistSource("Verified Fallback (Offline Mode)");
       const extractedCats = Array.from(new Set(fallbackChannels.map(c => c.category))).filter((cat) => Boolean(cat));
@@ -120,7 +171,7 @@ export default function App() {
       if (fallbackChannels.length > 0 && !selectedChannel) {
         setSelectedChannel(fallbackChannels[0]);
       }
-      setErrorMessage("Live API sync unavailable. Loaded verified offline channels.");
+      setErrorMessage("Live sync unavailable. Loaded verified offline channels.");
     } finally {
       setLoading(false);
     }
@@ -155,10 +206,17 @@ export default function App() {
     const updatedHistory = [
       newHistoryItem, 
       ...historyList.filter(h => h.channelName !== ch.name)
-    ].slice(0, 15); // keep max 15 items
+    ].slice(0, 20);
     
     setHistoryList(updatedHistory);
-    localStorage.setItem("toffee_playback_history", JSON.stringify(updatedHistory));
+    try {
+      localStorage.setItem("toffee_playback_history", JSON.stringify(updatedHistory));
+    } catch (_) {}
+
+    // Scroll player to top smoothly on mobile
+    if (window.innerWidth < 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const handleToggleFavorite = (channelName: string, e: React.MouseEvent) => {
@@ -170,10 +228,29 @@ export default function App() {
       updated = [...favorites, channelName];
     }
     setFavorites(updated);
-    localStorage.setItem("toffee_favorites", JSON.stringify(updated));
+    try {
+      localStorage.setItem("toffee_favorites", JSON.stringify(updated));
+    } catch (_) {}
   };
 
-  // Find next/prev channel for keyboard mapping or navigation
+  const handleShareChannel = async () => {
+    if (!selectedChannel) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${selectedChannel.name} - Sabbir Live TV`,
+          text: `Watch ${selectedChannel.name} live on Sabbir Live TV!`,
+          url: window.location.href
+        });
+      } catch (_) {}
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  // Next / Prev channel helper
   const getIndexAndNavigate = (dir: "next" | "prev") => {
     if (!selectedChannel || channels.length === 0) return;
     const currentIndex = channels.findIndex(c => c.name === selectedChannel.name);
@@ -188,7 +265,6 @@ export default function App() {
 
   // Filter channels based on tab selection, search text, and arrays
   const filteredChannels = channels.filter((ch) => {
-    // 1. Tag filtering
     if (activeCategory === "Favorites") {
       if (!favorites.includes(ch.name)) return false;
     } else if (activeCategory === "History") {
@@ -197,9 +273,8 @@ export default function App() {
       if (ch.category !== activeCategory) return false;
     }
 
-    // 2. Search query filtering
-    if (searchQuery) {
-      const matchText = searchQuery.toLowerCase();
+    if (searchQuery.trim()) {
+      const matchText = searchQuery.toLowerCase().trim();
       const nameMatch = ch.name.toLowerCase().includes(matchText);
       const categoryMatch = ch.category.toLowerCase().includes(matchText);
       return nameMatch || categoryMatch;
@@ -208,178 +283,333 @@ export default function App() {
     return true;
   });
 
+  // Category Icon helper
+  const getCategoryIcon = (cat: string) => {
+    const lower = cat.toLowerCase();
+    if (lower === "all") return <Tv size={13} className="shrink-0" />;
+    if (lower === "favorites") return <Star size={13} className="shrink-0 text-toffee-gold fill-toffee-gold" />;
+    if (lower === "history") return <Clock size={13} className="shrink-0" />;
+    if (lower.includes("sport") || lower.includes("খেলা")) return <Trophy size={13} className="shrink-0 text-amber-400" />;
+    if (lower.includes("bangla") || lower.includes("বাংলা")) return <Radio size={13} className="shrink-0 text-emerald-400" />;
+    if (lower.includes("news") || lower.includes("সংবাদ")) return <Newspaper size={13} className="shrink-0 text-sky-400" />;
+    if (lower.includes("kid") || lower.includes("কার্টুন")) return <Baby size={13} className="shrink-0 text-pink-400" />;
+    return <Film size={13} className="shrink-0" />;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-radial-brand text-gray-100 flex flex-col selection:bg-toffee-accent/50 selection:text-white overflow-x-hidden pt-1 font-sans relative">
+    <div className="min-h-screen bg-gradient-radial-brand text-gray-100 flex flex-col selection:bg-toffee-accent/50 selection:text-white overflow-x-hidden font-sans relative pb-20 lg:pb-6">
       
       {/* Visual background lights for beautiful design */}
-      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-toffee-accent/5 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-1/4 left-10 w-[400px] h-[400px] bg-sky-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-0 right-1/4 w-[400px] sm:w-[500px] h-[400px] sm:h-[500px] bg-toffee-accent/5 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-1/4 left-5 w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] bg-sky-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Styled Top Header Navigation Bar */}
-      <header id="app_header" className="sticky top-0 bg-frosted border-b border-frosted-medium z-40 px-4 md:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-toffee-accent to-pink-500 flex items-center justify-center text-white shadow-lg shadow-toffee-accent/20">
-            <Tv size={20} className="animate-pulse" />
+      {/* Styled Responsive Top Header */}
+      <header id="app_header" className="sticky top-0 bg-[#08090d]/90 backdrop-blur-xl border-b border-frosted-medium z-40 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-toffee-accent to-pink-500 flex items-center justify-center text-white shadow-lg shadow-toffee-accent/25 shrink-0">
+            <Tv size={18} className="animate-pulse" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-display font-black text-lg tracking-tight text-white">SABBIR LIVE TV</h1>
-              <span className="text-[9px] font-mono font-semibold bg-toffee-accent/10 text-toffee-accent px-1.5 py-0.5 rounded border border-toffee-accent/25 uppercase">
-                AUTO-SYNCPLAY
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="font-display font-black text-sm sm:text-base md:text-lg tracking-tight text-white truncate">
+                SABBIR LIVE TV
+              </h1>
+              <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-mono font-bold bg-toffee-accent/15 text-toffee-accent px-1.5 py-0.5 rounded border border-toffee-accent/30 uppercase shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-toffee-accent animate-ping" />
+                LIVE
               </span>
             </div>
-            <p className="text-[10px] text-gray-400 font-mono">HIGH QUALITY SECURE STREAM PROXY ENGINE</p>
+            <p className="hidden sm:block text-[10px] text-gray-400 font-mono truncate">
+              ULTRA HD LIVE STREAMING • SECURE PROXY
+            </p>
           </div>
         </div>
 
-        {/* Global status indicators & Refresh live M3U buttons */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Global actions: Fallback & Refresh */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Desktop Theater Mode Toggle */}
+          <button
+            id="global_theater_btn"
+            type="button"
+            onClick={handleToggleTheaterMode}
+            title={isTheaterMode ? "Exit Theater Mode (স্বাভাবিক ভিউ) [T]" : "Theater Mode / Wide Screen (থিয়েটার মোড / ওয়াইড ভিউ) [T]"}
+            className={`hidden lg:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition active:scale-95 touch-manipulation ${
+              isTheaterMode 
+                ? "bg-toffee-accent text-white border-toffee-accent shadow-md shadow-toffee-accent/20" 
+                : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10"
+            }`}
+          >
+            <Monitor size={13} />
+            <span>{isTheaterMode ? "স্বাভাবিক ভিউ" : "থিয়েটার মোড"}</span>
+          </button>
+
+          {/* Desktop / Global Fullscreen Toggle */}
+          <button
+            id="global_fullscreen_btn"
+            type="button"
+            onClick={toggleAppFullscreen}
+            title={isAppFullscreen ? "Exit Fullscreen (ফুলস্ক্রিন থেকে বের হন) [F]" : "Full Screen Desktop View (ডেস্কটপ ফুলস্ক্রিন) [F]"}
+            className="hidden sm:flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-gray-200 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-white/10 transition active:scale-95 touch-manipulation"
+          >
+            {isAppFullscreen ? <Shrink size={13} /> : <Maximize2 size={13} />}
+            <span>{isAppFullscreen ? "স্বাভাবিক স্ক্রিন" : "ফুলস্ক্রিন"}</span>
+          </button>
+
           <button
             id="global_fallback_btn"
+            type="button"
             onClick={handleLoadFallback}
             disabled={refreshing}
-            title="Load verified working streams from serverFallbackData"
-            className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-emerald-500/20 transition-all focus:outline-none active:scale-95 disabled:opacity-50"
+            title="Load verified offline channels"
+            className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-emerald-500/25 transition active:scale-95 disabled:opacity-50 touch-manipulation"
           >
-            <Tv size={13} />
+            <RotateCcw size={13} />
             <span className="hidden sm:inline">Fallback Feed</span>
           </button>
 
           <button
             id="global_refresh_btn"
+            type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className={`flex items-center gap-2 bg-toffee-accent/10 hover:bg-toffee-accent text-toffee-accent hover:text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-toffee-accent/20 transition-all focus:outline-none ${
-              refreshing ? "opacity-50" : "active:scale-95"
+            title="Sync live playlist"
+            className={`flex items-center gap-1.5 bg-toffee-accent/10 hover:bg-toffee-accent/20 text-toffee-accent px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-toffee-accent/25 transition active:scale-95 disabled:opacity-50 touch-manipulation ${
+              refreshing ? "opacity-50" : ""
             }`}
           >
-            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-            <span className="hidden xs:inline">{refreshing ? "Syncing..." : "Sync Remote"}</span>
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            <span className="hidden xs:inline">{refreshing ? "Syncing..." : "Sync"}</span>
           </button>
         </div>
       </header>
 
       {/* Dynamic Status / Fallback Alert Banner */}
       {errorMessage && (
-        <div id="app_alert_banner" className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 px-4 md:px-8 py-2 text-xs flex items-center justify-between z-30">
+        <div id="app_alert_banner" className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 px-4 sm:px-6 py-2 text-xs flex items-center justify-between z-30">
           <div className="flex items-center gap-2">
             <AlertCircle size={14} className="text-amber-400 shrink-0" />
             <span>{errorMessage}</span>
           </div>
           <button 
             id="dismiss_alert_btn"
+            type="button"
             onClick={() => setErrorMessage(null)} 
-            className="text-amber-400 hover:text-white text-[11px] underline cursor-pointer"
+            className="text-amber-400 hover:text-white text-[11px] underline cursor-pointer p-1"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Main Flex layout spanning full screen width */}
-      <main className="flex-1 w-full max-w-none px-4 md:px-8 py-6 flex flex-col lg:flex-row gap-6 lg:gap-8 z-10">
+      {/* Main Responsive Grid Layout (Full Screen / Ultra-Wide on Desktop) */}
+      <main className={`flex-1 w-full px-2 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-4 md:py-6 flex z-10 mx-auto transition-all duration-300 ${
+        isTheaterMode
+          ? "flex-col max-w-[1920px] 2xl:max-w-[2400px] gap-4 sm:gap-6"
+          : "flex-col lg:flex-row max-w-[1920px] 2xl:max-w-[2400px] gap-4 sm:gap-6 lg:gap-8"
+      }`}>
         
-        {/* LEFT COLUMN: Player & Now Playing Stats (Occupies all remaining left space) */}
-        <section className="flex-1 flex flex-col gap-6 min-w-0">
-          <div className="sticky top-20">
-            {/* The Custom Player */}
+        {/* LEFT/TOP COLUMN: Player & Now Playing Stats */}
+        <section className={`w-full flex flex-col gap-3 sm:gap-4 min-w-0 transition-all duration-300 ${
+          isTheaterMode ? "w-full" : "lg:flex-1"
+        }`}>
+          
+          {/* Responsive Video Player Container */}
+          <div className="w-full">
             <VideoPlayer 
               channel={selectedChannel}
               onNextChannel={() => getIndexAndNavigate("next")}
               onPrevChannel={() => getIndexAndNavigate("prev")}
+              isTheaterMode={isTheaterMode}
+              onToggleTheaterMode={handleToggleTheaterMode}
             />
+          </div>
 
-            {/* Selected Channel Metadata & Actions Card */}
-            {selectedChannel && (
-              <motion.div 
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-6 bg-frosted-card rounded-2xl border border-frosted-medium p-5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-lg shadow-black/20"
-              >
-                <div className="flex gap-4 items-center">
-                  {selectedChannel.logo ? (
-                    <img
-                      src={selectedChannel.logo}
-                      alt={selectedChannel.name}
-                      className="w-16 h-16 object-contain rounded-xl bg-black/40 p-2 border border-frosted-medium"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl bg-toffee-accent/10 flex items-center justify-center text-toffee-accent border border-toffee-accent/20">
-                      <Tv size={24} />
-                    </div>
-                  )}
-
-                  <div>
-                    <span className="text-[10px] font-mono bg-toffee-accent/15 text-toffee-accent px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                      {selectedChannel.category}
-                    </span>
-                    <h3 className="text-white font-display text-lg font-bold mt-1.5">
-                      {selectedChannel.name}
-                    </h3>
+          {/* Selected Channel Metadata Bar */}
+          {selectedChannel && (
+            <div 
+              id="selected_channel_bar"
+              className="bg-frosted-card rounded-xl sm:rounded-2xl border border-frosted-medium p-3 sm:p-4 flex items-center justify-between gap-3 shadow-lg shadow-black/20"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                {selectedChannel.logo ? (
+                  <img
+                    src={selectedChannel.logo}
+                    alt={selectedChannel.name}
+                    className="w-10 h-10 sm:w-12 sm:h-12 object-contain rounded-lg bg-black/40 p-1 border border-frosted-medium shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-toffee-accent/10 flex items-center justify-center text-toffee-accent border border-toffee-accent/20 shrink-0">
+                    <Tv size={20} />
                   </div>
-                </div>
+                )}
 
-                {/* Actions: Favorite / Unfavorite */}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-white font-display font-bold text-sm sm:text-base md:text-lg leading-tight truncate">
+                      {selectedChannel.name}
+                    </h2>
+                    <span className="hidden xs:inline-flex text-[9px] font-mono bg-toffee-accent/15 text-toffee-accent px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                      LIVE
+                    </span>
+                  </div>
+                  <p className="text-[10px] sm:text-xs text-gray-400 font-mono truncate mt-0.5">
+                    {selectedChannel.category}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons: Theater Mode, Fullscreen, Favorite & Share */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Desktop Theater Button on Channel Bar */}
+                <button
+                  id="metadata_theater_toggle"
+                  type="button"
+                  onClick={handleToggleTheaterMode}
+                  className={`hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition active:scale-95 touch-manipulation cursor-pointer ${
+                    isTheaterMode
+                      ? "bg-toffee-accent text-white border-toffee-accent"
+                      : "bg-white/5 border-white/10 hover:border-toffee-accent/50 text-gray-300"
+                  }`}
+                  title="থিয়েটার ভিউ টগল করুন [T]"
+                >
+                  <Monitor size={15} />
+                  <span>{isTheaterMode ? "স্বাভাবিক" : "থিয়েটার"}</span>
+                </button>
+
+                <button
+                  id="metadata_share_btn"
+                  type="button"
+                  onClick={handleShareChannel}
+                  className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition active:scale-90 touch-manipulation cursor-pointer"
+                  title="Share channel"
+                  aria-label="Share channel"
+                >
+                  {copiedLink ? <Check size={16} className="text-emerald-400" /> : <Share2 size={16} />}
+                </button>
+
                 <button
                   id="metadata_favorite_toggle"
+                  type="button"
                   onClick={(e) => handleToggleFavorite(selectedChannel.name, e)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition active:scale-95 touch-manipulation cursor-pointer ${
                     favorites.includes(selectedChannel.name)
-                      ? "bg-toffee-accent border-toffee-accent text-white"
-                      : "bg-white/5 border-white/10 hover:border-toffee-accent hover:text-toffee-accent text-gray-300"
+                      ? "bg-toffee-accent border-toffee-accent text-white shadow-md shadow-toffee-accent/20"
+                      : "bg-white/5 border-white/10 hover:border-toffee-accent text-gray-300"
                   }`}
+                  aria-label={favorites.includes(selectedChannel.name) ? "In Favorites" : "Add to Favorites"}
                 >
-                  <Star size={14} className={favorites.includes(selectedChannel.name) ? "fill-white" : ""} />
-                  <span>{favorites.includes(selectedChannel.name) ? "In Favorites" : "Add to Favorites"}</span>
+                  <Star size={15} className={favorites.includes(selectedChannel.name) ? "fill-white text-white" : "text-gray-400"} />
+                  <span className="hidden sm:inline">
+                    {favorites.includes(selectedChannel.name) ? "ফেভারিট" : "পছন্দ"}
+                  </span>
                 </button>
-              </motion.div>
-            )}
+              </div>
+            </div>
+          )}
 
-
+          {/* Quick Double-Tap Helper Hint on Mobile */}
+          <div className="lg:hidden flex items-center justify-between text-[10px] text-gray-400 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-1.5 font-mono">
+            <span>💡 ডবল ট্যাপ: বামে আগের, ডানে পরের চ্যানেল</span>
+            <span className="text-toffee-accent font-bold">FULL HD</span>
           </div>
         </section>
 
-        {/* RIGHT COLUMN: Channel search, Filter Tabs, and Grid listing (Stays consistent fixed width on the far right) */}
-        <section className="w-full lg:w-[360px] xl:w-[400px] shrink-0 flex flex-col gap-6">
-          
-          {/* Header Search Input */}
-          <div className="relative bg-frosted-card border border-frosted-medium rounded-2xl p-4 flex flex-col gap-4 shadow-lg">
-            <h3 className="text-sm font-display font-semibold text-white flex items-center gap-2">
-              <Compass size={15} className="text-toffee-accent" />
-              Browse Channels Directory
-            </h3>
+        {/* RIGHT/BOTTOM COLUMN: Channel Directory & Browsing */}
+        <section 
+          id="channel_directory_section" 
+          className={`w-full flex flex-col gap-3 sm:gap-4 scroll-mt-14 transition-all duration-300 ${
+            isTheaterMode 
+              ? "w-full" 
+              : "lg:w-[380px] xl:w-[440px] 2xl:w-[480px] shrink-0"
+          }`}
+        >
+          {/* Search Bar & View Mode Switcher Card */}
+          <div className="bg-frosted-card border border-frosted-medium rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col gap-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs sm:text-sm font-display font-semibold text-white flex items-center gap-2">
+                <Compass size={15} className="text-toffee-accent" />
+                <span>চ্যানেল তালিকা ({filteredChannels.length})</span>
+              </h3>
+
+              {/* View Mode Toggle: Grid vs List */}
+              <div className="flex items-center bg-black/40 rounded-lg p-0.5 border border-white/10">
+                <button
+                  id="view_mode_grid_btn"
+                  type="button"
+                  onClick={() => handleSetViewMode("grid")}
+                  className={`p-1.5 rounded-md transition-all touch-manipulation ${
+                    viewMode === "grid" 
+                      ? "bg-toffee-accent text-white shadow-sm" 
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                  title="Grid View (কার্ড ভিউ)"
+                  aria-label="Grid View"
+                >
+                  <LayoutGrid size={15} />
+                </button>
+                <button
+                  id="view_mode_list_btn"
+                  type="button"
+                  onClick={() => handleSetViewMode("list")}
+                  className={`p-1.5 rounded-md transition-all touch-manipulation ${
+                    viewMode === "list" 
+                      ? "bg-toffee-accent text-white shadow-sm" 
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                  title="List View (তালিকা ভিউ)"
+                  aria-label="List View"
+                >
+                  <List size={15} />
+                </button>
+              </div>
+            </div>
             
+            {/* Search Input Field */}
             <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
               <input
+                ref={searchInputRef}
                 id="channel_search_bar"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search sports, news, kids, dramas..."
-                className="w-full bg-black/30 border border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-400 outline-none focus:border-toffee-accent/50 focus:ring-1 focus:ring-toffee-accent/30 transition-all font-sans"
+                placeholder="চ্যানেল খুঁজুন (Sports, News, Bangla...)"
+                className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-9 py-2 sm:py-2.5 text-xs text-white placeholder-gray-400 outline-none focus:border-toffee-accent/60 focus:ring-1 focus:ring-toffee-accent/30 transition-all font-sans"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-300"
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Categorized Slider Tabs with drag-and-swipe support */}
-          <div className="relative w-full max-w-full">
+          {/* Touch-Smooth Category Pills Slider */}
+          <div className="relative w-full">
             <div 
               ref={categoriesRef}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUpOrLeave}
               onMouseLeave={handleMouseUpOrLeave}
-              className="flex gap-2 overflow-x-auto pb-2 scrollbar-none snap-x font-sans w-full scroll-smooth px-1 select-none cursor-grab active:cursor-grabbing"
+              className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none snap-x font-sans w-full scroll-smooth select-none cursor-grab active:cursor-grabbing px-0.5"
             >
               {categories.map((cat) => {
                 const isActive = activeCategory === cat;
                 return (
                   <button
                     key={cat}
+                    id={`cat_chip_${cat.replace(/\s+/g, '_')}`}
+                    type="button"
                     onClick={(e) => {
                       if (dragRef.current.hasMoved) {
                         e.preventDefault();
@@ -387,18 +617,18 @@ export default function App() {
                       }
                       setActiveCategory(cat);
                     }}
-                    className={`snap-start relative text-xs px-3.5 py-2 rounded-lg font-medium cursor-pointer transition-all duration-200 capitalize whitespace-nowrap focus:outline-none ${
+                    className={`snap-start flex items-center gap-1.5 text-xs px-3 py-1.5 sm:py-2 rounded-xl font-medium cursor-pointer transition-all duration-200 capitalize whitespace-nowrap focus:outline-none touch-manipulation active:scale-95 ${
                       isActive 
-                        ? "bg-toffee-accent text-white font-bold shadow-md shadow-toffee-accent/20" 
-                        : "bg-frosted text-gray-400 hover:text-white border border-frosted-light hover:bg-frosted-active"
+                        ? "bg-toffee-accent text-white font-bold shadow-md shadow-toffee-accent/25 ring-1 ring-toffee-accent/50" 
+                        : "bg-frosted text-gray-400 hover:text-white border border-frosted-light hover:bg-frosted-card"
                     }`}
                   >
+                    {getCategoryIcon(cat)}
                     <span>{cat}</span>
-                    {isActive && (
-                      <motion.div 
-                        layoutId="activeTabGlow"
-                        className="absolute inset-0 rounded-lg border border-toffee-accent/50 filter blur-xs -z-10" 
-                      />
+                    {cat === "Favorites" && favorites.length > 0 && (
+                      <span className="text-[10px] bg-black/40 px-1.5 py-0.2 rounded-full font-mono">
+                        {favorites.length}
+                      </span>
                     )}
                   </button>
                 );
@@ -406,127 +636,107 @@ export default function App() {
             </div>
           </div>
 
-          {/* Grid channels display container */}
-          <div className="bg-frosted-card border border-frosted-medium rounded-2xl overflow-hidden flex flex-col max-h-[600px] lg:max-h-[70vh] shadow-xl">
+          {/* Channels Listing (Responsive Grid or List) */}
+          <div className={`bg-frosted-card border border-frosted-medium rounded-xl sm:rounded-2xl overflow-hidden flex flex-col shadow-xl transition-all duration-300 ${
+            isTheaterMode ? "max-h-none" : "lg:max-h-[75vh]"
+          }`}>
             
-            <div className="p-4 border-b border-frosted-light flex justify-between items-center bg-white/[0.02] backdrop-blur-md">
+            {/* Header info bar */}
+            <div className="p-3 sm:p-3.5 border-b border-frosted-light flex justify-between items-center bg-white/[0.02] backdrop-blur-md">
               <span className="text-[11px] font-mono text-gray-400">
-                Found <span className="text-toffee-accent font-bold font-sans">{filteredChannels.length}</span> channels
+                দেখাচ্ছে: <span className="text-toffee-accent font-bold font-sans">{filteredChannels.length}</span> টি চ্যানেল
               </span>
 
               {activeCategory === "History" && historyList.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => {
                     setHistoryList([]);
                     localStorage.removeItem("toffee_playback_history");
                   }}
-                  className="text-[10px] font-mono text-gray-500 hover:text-toffee-accent uppercase tracking-widest font-bold"
+                  className="text-[10px] font-mono text-gray-400 hover:text-toffee-accent uppercase tracking-wider font-bold transition cursor-pointer p-1"
                 >
-                  Clear history
+                  ক্লিয়ার হিস্ট্রি
                 </button>
               )}
             </div>
 
-            <div id="channels_scroll_grid" className="overflow-y-auto flex-1 p-4 flex flex-col gap-2.5">
+            {/* Scrollable / Natural channels container */}
+            <div 
+              id="channels_scroll_container" 
+              className="overflow-y-auto flex-1 p-2.5 sm:p-3.5"
+            >
               {loading ? (
-                // Loading placeholding structures
-                Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex gap-3 items-center p-3 rounded-xl bg-frosted border border-frosted-light animate-pulse">
-                    <div className="w-12 h-12 rounded-lg bg-white/5" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3.5 bg-white/5 rounded-sm w-1/2" />
-                      <div className="h-2.5 bg-white/5 rounded-sm w-1/4" />
+                // Skeleton loading state
+                <div className={
+                  viewMode === "grid" 
+                    ? isTheaterMode 
+                      ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5" 
+                      : "grid grid-cols-2 gap-2.5" 
+                    : "flex flex-col gap-2.5"
+                }>
+                  {Array.from({ length: isTheaterMode ? 12 : 6 }).map((_, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-frosted border border-frosted-light animate-pulse flex flex-col gap-2">
+                      <div className="h-16 bg-white/5 rounded-lg w-full" />
+                      <div className="h-3 bg-white/5 rounded w-3/4" />
+                      <div className="h-2 bg-white/5 rounded w-1/2" />
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : filteredChannels.length > 0 ? (
-                <AnimatePresence mode="popLayout">
-                  {filteredChannels.map((ch, index) => {
-                    const isSelected = selectedChannel?.name === ch.name;
-                    const isFav = favorites.includes(ch.name);
-                    
-                    return (
-                      <motion.div
-                        layout
-                        key={ch.name}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.18, delay: Math.min(index * 0.02, 0.2) }}
-                        onClick={() => handleSelectChannel(ch)}
-                        className={`group flex items-center justify-between p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 ${
-                          isSelected 
-                            ? "bg-frosted-active border-toffee-accent/50 shadow-md shadow-toffee-accent/5" 
-                            : "bg-frosted border-frosted-light hover:border-frosted-medium hover:bg-frosted-active"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Feed Image Logo */}
-                          {ch.logo ? (
-                            <img
-                              src={ch.logo}
-                              alt={ch.name}
-                              className="w-12 h-12 object-contain bg-black/20 p-1.5 rounded-lg border border-frosted-light group-hover:scale-105 transition duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = "none";
-                              }}
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-frosted border border-frosted-light flex items-center justify-center text-gray-400">
-                              <Tv size={18} />
-                            </div>
-                          )}
-
-                          <div className="font-display">
-                            <h4 id={`channel_name_${index}`} className={`text-xs font-bold leading-tight ${isSelected ? "text-toffee-accent" : "text-white group-hover:text-toffee-accent transition"}`}>
-                              {ch.name}
-                            </h4>
-                            <span className="text-[10px] text-gray-400 inline-block font-mono mt-1">
-                              {ch.category}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Interactive triggers */}
-                        <div className="flex items-center gap-2">
-                          {isSelected && (
-                            <span className="flex h-2 w-2 relative">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-toffee-accent opacity-75" />
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-toffee-accent" />
-                            </span>
-                          )}
-
-                          {/* Fast Favorite toggle star */}
-                          <button
-                            id={`fav_toggle_${index}`}
-                            onClick={(e) => handleToggleFavorite(ch.name, e)}
-                            className="p-1.5 rounded-md hover:bg-white/15 text-gray-400 hover:text-toffee-accent transition cursor-pointer"
-                          >
-                            <Star size={13} className={isFav ? "fill-toffee-gold text-toffee-gold" : "text-gray-500"} />
-                          </button>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
+                <div className={
+                  viewMode === "grid"
+                    ? isTheaterMode
+                      ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2.5 sm:gap-3"
+                      : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-2 gap-2 sm:gap-2.5"
+                    : isTheaterMode
+                      ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5"
+                      : "flex flex-col gap-2"
+                }>
+                  <AnimatePresence mode="popLayout">
+                    {filteredChannels.map((ch, index) => {
+                      const isSelected = selectedChannel?.name === ch.name;
+                      const isFav = favorites.includes(ch.name);
+                      
+                      return (
+                        <ChannelCard
+                          key={ch.name}
+                          channel={ch}
+                          index={index}
+                          isSelected={isSelected}
+                          isFavorite={isFav}
+                          viewMode={viewMode}
+                          onSelect={handleSelectChannel}
+                          onToggleFavorite={handleToggleFavorite}
+                        />
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
               ) : (
                 <div id="no_channels_found" className="text-center py-12 px-4">
-                  <AlertCircle size={28} className="text-zinc-600 mx-auto mb-3" />
-                  <p className="text-white/60 text-xs font-medium">No links match your search parameters</p>
-                  <p className="text-gray-400 text-[11px] mt-1">Select another tab filter or try a typing keywords.</p>
+                  <AlertCircle size={32} className="text-zinc-600 mx-auto mb-2" />
+                  <p className="text-white/70 text-xs font-semibold">কোনো চ্যানেল খুঁজে পাওয়া যায়নি</p>
+                  <p className="text-gray-400 text-[11px] mt-1">অন্য ক্যাটাগরি বেছে নিন অথবা নতুন কি-ওয়ার্ড দিয়ে খুঁজুন।</p>
                 </div>
               )}
             </div>
           </div>
         </section>
-
       </main>
 
-      {/* Aesthetic human literal Footer bar */}
-      <footer id="app_footer" className="mt-auto border-t border-frosted-light py-4 text-center text-[10px] font-mono text-gray-400 bg-[#08090d]/60 backdrop-blur-md">
-        <p>© 2026 Sabbir NetStream IPTV Engine • Powered by High-performance Node Proxy & WebRTC players</p>
+      {/* Aesthetic Literal Footer */}
+      <footer id="app_footer" className="mt-auto border-t border-frosted-light py-3 px-4 text-center text-[10px] font-mono text-gray-400 bg-[#08090d]/80 backdrop-blur-md">
+        <p>© 2026 Sabbir Live TV Engine • Fast M3U8 Streaming & Secure Web Proxy</p>
       </footer>
+
+      {/* Fixed Mobile Bottom Navigation Bar (Hidden on desktop) */}
+      <MobileBottomNav
+        activeCategory={activeCategory}
+        onSelectCategory={(cat) => setActiveCategory(cat)}
+        favoritesCount={favorites.length}
+        historyCount={historyList.length}
+      />
     </div>
   );
 }

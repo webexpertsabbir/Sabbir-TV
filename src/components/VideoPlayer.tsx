@@ -1,15 +1,23 @@
 import React, { useRef, useEffect, useState } from "react";
 import Hls from "hls.js";
-import { Play, Pause, Volume2, VolumeX, Maximize2, Tv, AlertCircle, RefreshCw, Layers, Check, Expand, Shrink, SkipBack, SkipForward } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize2, Tv, AlertCircle, RefreshCw, Layers, Check, Expand, Shrink, SkipBack, SkipForward, PictureInPicture, Monitor } from "lucide-react";
 import { Channel } from "../types";
 
 interface VideoPlayerProps {
   channel: Channel | null;
   onPrevChannel?: () => void;
   onNextChannel?: () => void;
+  isTheaterMode?: boolean;
+  onToggleTheaterMode?: () => void;
 }
 
-export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: VideoPlayerProps) {
+export default function VideoPlayer({ 
+  channel, 
+  onPrevChannel, 
+  onNextChannel,
+  isTheaterMode = false,
+  onToggleTheaterMode
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -28,6 +36,8 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
   const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
   const [streamStats, setStreamStats] = useState<{ fps: number; bandwidth: number } | null>(null);
   const [showControls, setShowControls] = useState<boolean>(true);
+  const [tapRipple, setTapRipple] = useState<"prev" | "next" | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-hide controls timer management
@@ -325,6 +335,45 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
+  // Desktop keyboard shortcuts (F: Fullscreen, T: Theater, Space/K: Play/Pause, M: Mute, Arrows: Channels)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === "t" || e.key === "T") {
+        if (onToggleTheaterMode) {
+          e.preventDefault();
+          onToggleTheaterMode();
+        }
+      } else if (e.key === " " || e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        togglePlayback();
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        toggleMute();
+      } else if (e.key === "ArrowRight") {
+        if (onNextChannel) {
+          e.preventDefault();
+          onNextChannel();
+        }
+      } else if (e.key === "ArrowLeft") {
+        if (onPrevChannel) {
+          e.preventDefault();
+          onPrevChannel();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPlaying, isMuted, onNextChannel, onPrevChannel, onToggleTheaterMode]);
+
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
   };
@@ -342,6 +391,45 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
     else setAspectRatio("video");
   };
 
+  const togglePiP = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (document.pictureInPictureEnabled) {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.error("PiP error:", err);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.changedTouches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
+    const now = Date.now();
+    const timeDiff = now - lastTapRef.current.time;
+
+    // Double tap detected (within 320ms and within 80px distance)
+    if (timeDiff < 320 && Math.abs(touchX - lastTapRef.current.x) < 80) {
+      if (touchX < rect.width * 0.45 && onPrevChannel) {
+        onPrevChannel();
+        setTapRipple("prev");
+        setTimeout(() => setTapRipple(null), 700);
+      } else if (touchX > rect.width * 0.55 && onNextChannel) {
+        onNextChannel();
+        setTapRipple("next");
+        setTimeout(() => setTapRipple(null), 700);
+      }
+      lastTapRef.current = { time: 0, x: 0 };
+    } else {
+      lastTapRef.current = { time: now, x: touchX };
+      resetControlsTimer();
+    }
+  };
+
   return (
     <div 
       id="video_player_container"
@@ -349,8 +437,14 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
       onMouseMove={handleMouseMove}
       onMouseEnter={resetControlsTimer}
       onMouseLeave={handleMouseLeave}
-      onTouchStart={resetControlsTimer}
-      className={`relative w-full aspect-video rounded-2xl overflow-hidden bg-frosted-card border border-frosted-medium shadow-2xl transition-all duration-300 hover:border-toffee-accent/20 select-none ${
+      onTouchEnd={handleTouchEnd}
+      className={`relative w-full overflow-hidden bg-frosted-card border shadow-2xl transition-all duration-300 select-none touch-manipulation ${
+        isFullscreen
+          ? "fixed inset-0 z-50 rounded-none border-none w-screen h-screen"
+          : isTheaterMode
+            ? "aspect-video max-h-[78vh] 2xl:max-h-[82vh] rounded-2xl mx-auto border-frosted-medium hover:border-toffee-accent/30"
+            : "aspect-video rounded-2xl border-frosted-medium hover:border-toffee-accent/20"
+      } ${
         isPlaying && !showControls ? "cursor-none" : "cursor-default"
       }`}
     >
@@ -366,6 +460,25 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
             onClick={togglePlayback}
             playsInline
           />
+
+          {/* Double-tap visual feedback ripples */}
+          {tapRipple === "prev" && (
+            <div className="absolute inset-y-0 left-0 w-1/2 flex items-center justify-start pl-8 bg-gradient-to-r from-toffee-accent/25 to-transparent pointer-events-none z-30 animate-pulse">
+              <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/20 text-white shadow-xl">
+                <SkipBack size={18} className="text-toffee-accent" />
+                <span className="text-xs font-display font-bold">আগের চ্যানেল</span>
+              </div>
+            </div>
+          )}
+
+          {tapRipple === "next" && (
+            <div className="absolute inset-y-0 right-0 w-1/2 flex items-center justify-end pr-8 bg-gradient-to-l from-toffee-accent/25 to-transparent pointer-events-none z-30 animate-pulse">
+              <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/20 text-white shadow-xl">
+                <span className="text-xs font-display font-bold">পরের চ্যানেল</span>
+                <SkipForward size={18} className="text-toffee-accent" />
+              </div>
+            </div>
+          )}
 
           {/* Buffering Overlay */}
           {isBuffering && !loadError && (
@@ -669,6 +782,40 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
                     <RefreshCw size={15} />
                   </button>
 
+                  {/* Picture-in-Picture Button */}
+                  {typeof document !== "undefined" && "pictureInPictureEnabled" in document && (
+                    <button
+                      id="player_pip_btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePiP();
+                      }}
+                      className="p-1.5 rounded-lg text-white/75 hover:text-toffee-accent hover:bg-white/10 transition active:scale-90 cursor-pointer touch-manipulation"
+                      title="Picture in Picture"
+                    >
+                      <PictureInPicture size={15} />
+                    </button>
+                  )}
+
+                  {/* Theater / Cinema Mode (Desktop) */}
+                  {onToggleTheaterMode && (
+                    <button
+                      id="player_theater_btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleTheaterMode();
+                      }}
+                      className={`hidden lg:flex items-center justify-center p-1.5 rounded-lg transition active:scale-90 cursor-pointer touch-manipulation ${
+                        isTheaterMode 
+                          ? "text-toffee-accent bg-white/15" 
+                          : "text-white/75 hover:text-toffee-accent hover:bg-white/10"
+                      }`}
+                      title={isTheaterMode ? "Exit Theater Mode (নরমাল ভিউ) [T]" : "Theater Mode / Full Width (থিয়েটার ভিউ) [T]"}
+                    >
+                      <Monitor size={15} />
+                    </button>
+                  )}
+
                   {/* Fullscreen control */}
                   <button
                     id="player_fullscreen_btn"
@@ -677,7 +824,7 @@ export default function VideoPlayer({ channel, onPrevChannel, onNextChannel }: V
                       toggleFullscreen();
                     }}
                     className="p-1.5 rounded-lg text-white hover:text-toffee-accent hover:bg-white/10 transition active:scale-90 cursor-pointer touch-manipulation"
-                    title="Fullscreen"
+                    title={isFullscreen ? "Exit Fullscreen [F]" : "Full Screen [F]"}
                   >
                     {isFullscreen ? <Shrink size={17} /> : <Expand size={17} />}
                   </button>
