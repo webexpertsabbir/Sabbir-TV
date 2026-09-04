@@ -1,0 +1,6 @@
+{
+  "name": "Toffee Live TV",
+  "description": "An elegant web IPTV player with server-side proxying to stream and categorize Toffee Live TV channels smoothly.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
