@@ -104,7 +104,7 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // API endpoints to fetch live toffee channel manifest
+  // API endpoints to fetch live Smart channel manifest
   app.get("/api/channels", async (req, res) => {
     // If client explicitly requests fallback data, return immediately
     if (req.query.source === "fallback" || req.query.fallback === "true") {
@@ -130,7 +130,7 @@ async function startServer() {
         {
           headers: {
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "ToffeeLiveProxy-Applet (Express Node)"
+            "User-Agent": "SmartLiveProxy-Applet (Express Node)"
           },
           signal: controller.signal
         }
@@ -179,7 +179,7 @@ async function startServer() {
     if (m3uText) {
       try {
         const uRes = await fetch("https://raw.githubusercontent.com/BINOD-XD/Toffee-Auto-Update-Playlist/refs/heads/main/toffee_channel_data.json?t=" + Date.now(), {
-          headers: { "User-Agent": "ToffeeLiveProxy-Applet (Express Node)" }
+          headers: { "User-Agent": "SmartLiveProxy-Applet (Express Node)" }
         });
         if (uRes.ok) {
           const uJson = await uRes.json() as any;

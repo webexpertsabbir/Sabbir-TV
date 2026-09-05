@@ -121,7 +121,7 @@ export default async (req: Request) => {
       const res = await fetch(
         "https://raw.githubusercontent.com/BINOD-XD/Toffee-Auto-Update-Playlist/refs/heads/main/toffee_NS_Player.m3u?t=" + Date.now(),
         {
-          headers: { "User-Agent": "ToffeeLiveProxy-Netlify" },
+          headers: { "User-Agent": "SmartLiveProxy-Netlify" },
           signal: controller.signal
         }
       );
@@ -227,7 +227,7 @@ export default async (req: Request) => {
     }
   }
 
-  return new Response(JSON.stringify({ status: "ok", message: "Toffee Netlify Proxy Online" }), {
+  return new Response(JSON.stringify({ status: "ok", message: "Smart Netlify Proxy Online" }), {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*"
@@ -280,7 +280,7 @@ export const handler = async (event: any) => {
       const res = await fetch(
         "https://raw.githubusercontent.com/BINOD-XD/Toffee-Auto-Update-Playlist/refs/heads/main/toffee_NS_Player.m3u?t=" + Date.now(),
         {
-          headers: { "User-Agent": "ToffeeLiveProxy-Netlify" },
+          headers: { "User-Agent": "SmartLiveProxy-Netlify" },
           signal: controller.signal
         }
       );
@@ -406,6 +406,6 @@ export const handler = async (event: any) => {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*"
     },
-    body: JSON.stringify({ status: "ok", message: "Toffee Netlify Proxy Ready" })
+    body: JSON.stringify({ status: "ok", message: "Smart Netlify Proxy Ready" })
   };
 };

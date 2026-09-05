@@ -866,7 +866,7 @@ export default function VideoPlayer({
           <div className="w-16 h-16 rounded-full bg-toffee-accent/10 border border-toffee-accent/20 flex items-center justify-center mb-4 text-toffee-accent animate-pulse">
             <Tv size={32} />
           </div>
-          <h2 className="text-white text-lg font-display font-semibold mb-1">Sabbir TV Stream Engine Ready</h2>
+          <h2 className="text-white text-lg font-display font-semibold mb-1">Smart TV Stream Engine Ready</h2>
           <p className="text-white/40 text-xs max-w-sm mb-4 leading-relaxed font-sans">
             Please choose any live sports, news, entertainment, or kids channel from the dashboard below to initialize the server credentials.
           </p>

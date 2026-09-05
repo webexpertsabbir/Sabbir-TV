@@ -32,7 +32,7 @@ export default function App() {
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("toffee_theater_mode") === "true";
+      return (localStorage.getItem("smart_theater_mode") || localStorage.getItem("toffee_theater_mode")) === "true";
     } catch (_) {
       return false;
     }
@@ -103,7 +103,7 @@ export default function App() {
     setIsTheaterMode(prev => {
       const next = !prev;
       try {
-        localStorage.setItem("toffee_theater_mode", String(next));
+        localStorage.setItem("smart_theater_mode", String(next));
       } catch (_) {}
       return next;
     });
@@ -145,18 +145,18 @@ export default function App() {
   // Load favorites & history from localStorage on mount
   useEffect(() => {
     try {
-      const storedFavs = localStorage.getItem("toffee_favorites");
+      const storedFavs = localStorage.getItem("smart_favorites") || localStorage.getItem("toffee_favorites");
       if (storedFavs) {
         setFavorites(JSON.parse(storedFavs));
       }
       
-      const storedHistory = localStorage.getItem("toffee_playback_history");
+      const storedHistory = localStorage.getItem("smart_playback_history") || localStorage.getItem("toffee_playback_history");
       if (storedHistory) {
         setHistoryList(JSON.parse(storedHistory));
       }
 
       // Check saved view mode
-      const storedViewMode = localStorage.getItem("toffee_view_mode") as "grid" | "list" | null;
+      const storedViewMode = (localStorage.getItem("smart_view_mode") || localStorage.getItem("toffee_view_mode")) as "grid" | "list" | null;
       if (storedViewMode) {
         setViewMode(storedViewMode);
       }
@@ -168,7 +168,7 @@ export default function App() {
   const handleSetViewMode = (mode: "grid" | "list") => {
     setViewMode(mode);
     try {
-      localStorage.setItem("toffee_view_mode", mode);
+      localStorage.setItem("smart_view_mode", mode);
     } catch (_) {}
   };
 
@@ -247,7 +247,7 @@ export default function App() {
     
     setHistoryList(updatedHistory);
     try {
-      localStorage.setItem("toffee_playback_history", JSON.stringify(updatedHistory));
+      localStorage.setItem("smart_playback_history", JSON.stringify(updatedHistory));
     } catch (_) {}
 
     // Mobile visual feedback toast
@@ -271,7 +271,7 @@ export default function App() {
     }
     setFavorites(updated);
     try {
-      localStorage.setItem("toffee_favorites", JSON.stringify(updated));
+      localStorage.setItem("smart_favorites", JSON.stringify(updated));
     } catch (_) {}
   };
 
@@ -280,8 +280,8 @@ export default function App() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${selectedChannel.name} - Sabbir Live TV`,
-          text: `Watch ${selectedChannel.name} live on Sabbir Live TV!`,
+          title: `${selectedChannel.name} - Smart Live TV`,
+          text: `Watch ${selectedChannel.name} live on Smart Live TV!`,
           url: window.location.href
         });
       } catch (_) {}
@@ -765,6 +765,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setHistoryList([]);
+                    localStorage.removeItem("smart_playback_history");
                     localStorage.removeItem("toffee_playback_history");
                   }}
                   className="text-[10px] font-mono text-gray-400 hover:text-toffee-accent uppercase tracking-wider font-bold transition cursor-pointer p-1"

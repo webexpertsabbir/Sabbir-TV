@@ -412,7 +412,7 @@ export async function fetchChannelsClientResilient(forceFallback = false): Promi
 
   // 2. Direct client-side fetch from GitHub Raw API (CORS enabled by GitHub)
   try {
-    console.log("Attempting direct client-side fetch from GitHub Toffee playlist...");
+    console.log("Attempting direct client-side fetch from GitHub Smart playlist...");
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
