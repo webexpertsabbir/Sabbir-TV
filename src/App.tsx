@@ -840,7 +840,7 @@ export default function App() {
 
       {/* Aesthetic Literal Footer */}
       <footer id="app_footer" className="mt-auto border-t border-frosted-light py-3 px-4 text-center text-[10px] font-mono text-gray-400 bg-[#08090d]/80 backdrop-blur-md">
-        <p>© 2026 Sabbir Live TV Engine • Fast M3U8 Streaming & Secure Web Proxy</p>
+        <p>© 2026 Smart Live TV Engine • Fast M3U8 Streaming & Secure Web Proxy</p>
       </footer>
 
       {/* Fixed Mobile Bottom Navigation Bar (Hidden on desktop) */}
